@@ -2,7 +2,7 @@
 
 use eframe::egui;
 use egui::{FontId, FontFamily::Proportional, TextStyle::*};
-use std::{path::PathBuf, io};
+use std::{path::PathBuf};
 mod utils;
 
 fn main() -> Result<(), eframe::Error> {
@@ -14,17 +14,12 @@ fn main() -> Result<(), eframe::Error> {
     let error_message: String;
     let rules: Option<serde_json::Value>;
 
-    if let Ok(content) = &utils::read_content_file(PathBuf::from("rules.json")) {
-        if let Ok(rules_json) = serde_json::from_str(&content) {
-            rules = rules_json;
+    if let Ok(rules_json) = utils::read_json_file(PathBuf::from("rules.json")) {
+            rules = Some(rules_json);
             error_message = String::from("");
-        } else {
-            rules = None;
-            error_message = String::from("rules.json format is not correct (no valid json)");
-        }
     } else {
         rules = None;
-        error_message = String::from("rules.json file not found, place this file in the same folder as the application and reload");
+        error_message = String::from("rules.json file not in same folder as the application or json format not correct, fix these problems and reload");
     }
 
     eframe::run_native(
@@ -85,7 +80,7 @@ impl eframe::App for MainApp {
                         while self.picked_paths.len() > 0 {                        
                             let picked_path = self.picked_paths.pop().unwrap();
         
-                            if format_subtitle(self.rules.clone().unwrap(), picked_path.clone()).is_err() {
+                            if utils::format_subtitle(self.rules.clone().unwrap(), picked_path.clone()).is_err() {
                                 self.picked_paths.push(picked_path.clone());
                             }
                         }
@@ -100,13 +95,4 @@ impl eframe::App for MainApp {
             }
         });
     }
-}
-
-fn format_subtitle(rules: serde_json::Value, path: PathBuf) -> Result<(), io::Error> {
-    let mut content = utils::read_content_file(path.clone())?;
-    for (key, value) in rules.as_object().unwrap() {
-        content = content.replace(key, value.as_str().unwrap());
-    }
-    
-    utils::write_content_file(content, path)
 }
