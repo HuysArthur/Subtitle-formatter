@@ -11,42 +11,32 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
 
+    let error_message: String;
+    let rules: Option<serde_json::Value>;
+
     if let Ok(content) = &utils::read_content_file(PathBuf::from("rules.json")) {
         if let Ok(rules_json) = serde_json::from_str(&content) {
-            eframe::run_native(
-                "Subtitle formatter",
-                options,
-                Box::new(|_cc| Box::new(MainApp {
-                    picked_paths: vec![],
-                    rules: rules_json,
-                    error_message: String::from(""),
-                    done: false
-                })),
-            )
+            rules = rules_json;
+            error_message = String::from("");
         } else {
-            eframe::run_native(
-                "Subtitle formatter",
-                options,
-                Box::new(|_cc| Box::new(MainApp {
-                    picked_paths: vec![],
-                    rules: None,
-                    error_message: String::from("rules.json format is not correct (no valid json)"),
-                    done: false
-                })),
-            )
+            rules = None;
+            error_message = String::from("rules.json format is not correct (no valid json)");
         }
     } else {
-        eframe::run_native(
-            "Subtitle formatter",
-            options,
-            Box::new(|_cc| Box::new(MainApp {
-                picked_paths: vec![],
-                rules: None,
-                error_message: String::from("rules.json file not found, place this file in the same folder as the application and reload"),
-                done: false
-            })),
-        )
+        rules = None;
+        error_message = String::from("rules.json file not found, place this file in the same folder as the application and reload");
     }
+
+    eframe::run_native(
+        "Subtitle formatter",
+        options,
+        Box::new(|_cc| Box::new(MainApp {
+            picked_paths: vec![],
+            rules,
+            error_message,
+            done: false
+        })),
+    )
 
     
 }
@@ -82,6 +72,7 @@ impl eframe::App for MainApp {
                 ui.vertical_centered(|ui| {
                     if ui.button("Choose subtitles").clicked() {
                         for picked_path in rfd::FileDialog::new().add_filter("subtitles", &["srt"]).pick_files().unwrap_or_else(|| vec![]) {
+                            self.done = false;
                             if !self.picked_paths.contains(&picked_path) {
                                 self.picked_paths.push(picked_path);
                             }
