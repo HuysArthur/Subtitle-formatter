@@ -21,11 +21,11 @@ mod tests {
         let path: PathBuf = PathBuf::from(r"resources\tests\test.srt");
 
         if let Ok(_) = File::create(path.clone()) {
-            utils::write_content_file("test".to_string(), path.clone());
+            utils::write_content_file("test".as_bytes().to_vec(), path.clone());
             if let Ok(after) = utils::read_content_file(path.clone()) {
                 remove_file(path.clone()).ok();
     
-                assert_eq!(after, "test".to_string());
+                assert_eq!(after, "test".as_bytes());
             }
         }
     }
@@ -42,7 +42,7 @@ mod tests {
 
             let path_content: PathBuf = PathBuf::from(r"resources\tests\content.srt");
             if let Ok(_) = File::create(path_content.clone()) {
-                utils::write_content_file(content.to_string(), path_content.clone());
+                utils::write_content_file(content.as_bytes().to_vec(), path_content.clone());
 
                 let mut content_result: String = String::from("");
                 for (_, value) in rules_json.as_object().unwrap() {
@@ -51,8 +51,8 @@ mod tests {
                 }
                 let path_content_result: PathBuf = PathBuf::from(r"resources\tests\content_result.srt");
                 if let Ok(_) = File::create(path_content_result.clone()) {
-                    utils::write_content_file(content_result.to_string(), path_content_result.clone());
-
+                    utils::write_content_file(content_result.as_bytes().to_vec(), path_content_result.clone());
+ 
                     utils::format_subtitle(utils::read_json_file(path.clone()).unwrap(), path_content.clone());
 
                     assert_eq!(utils::read_content_file(path_content.clone()).unwrap(), utils::read_content_file(path_content_result.clone()).unwrap());

@@ -2,7 +2,7 @@
 
 use eframe::egui;
 use egui::{FontId, FontFamily::Proportional, TextStyle::*};
-use std::{path::PathBuf};
+use std::{path::PathBuf, thread};
 mod utils;
 
 fn main() -> Result<(), eframe::Error> {
@@ -35,8 +35,6 @@ fn main() -> Result<(), eframe::Error> {
             done: false
         })),
     )
-
-    
 }
 
 #[derive(Default)]
@@ -52,6 +50,7 @@ struct MainApp {
 
 impl eframe::App for MainApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        println!("start");
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut style = (*ctx.style()).clone();
 
@@ -81,12 +80,12 @@ impl eframe::App for MainApp {
                                 }
                             }
                         }
-        
+
                         ui.label(format!("Files selected: {}", self.picked_paths.len()));
-        
+
                         if ui.button("Format subtitles").clicked() {
-                            if self.picked_paths.len() > 0 {       
-                                self.working = true;                 
+                            if self.picked_paths.len() > 0 {
+                                self.working = true;
                             }
                         }
                         if self.done {
@@ -101,11 +100,11 @@ impl eframe::App for MainApp {
                     } else {
                         if self.picked_paths.len() > 0 {
                             ui.label(format!("Files todo: {}", self.picked_paths.len()));
-    
+
                             let picked_path = self.picked_paths.pop().unwrap();
 
                             ui.label(format!("Current file: {}", picked_path.display().to_string()));
-                            
+
                             if let Err(err) = utils::format_subtitle(self.rules.clone().unwrap(), picked_path.clone()) {
                                 self.failed_error_messages.push(err.to_string());
                                 self.failed_paths.push(picked_path);
@@ -120,5 +119,6 @@ impl eframe::App for MainApp {
                 ui.heading(self.error_message.clone());
             }
         });
+        println!("stop");
     }
 }
