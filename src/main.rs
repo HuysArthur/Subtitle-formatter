@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use eframe::egui;
-use egui::{FontId, FontFamily::Proportional, TextStyle::*, ProgressBar, Button};
-use std::{path::PathBuf, thread, sync::mpsc::{Sender, Receiver, channel}};
+use egui::{FontId, FontFamily::Proportional, TextStyle::*, ProgressBar};
+use std::{path::PathBuf, thread::{JoinHandle, self}, sync::mpsc::{Receiver, sync_channel, SyncSender, channel}, time::Duration};
 mod utils;
 
 struct MainApp {
@@ -12,9 +12,11 @@ struct MainApp {
     rules: Option<serde_json::Value>,
     error_message: String,
     working: bool,
-    progress: i32, // 0-100
-    tx: Sender<i32>,
-    rx: Receiver<i32>
+    done: bool,
+    amount_done: usize,
+    tx: SyncSender<usize>,
+    rx: Receiver<usize>,
+    thread_handler: Option<JoinHandle<(Vec<PathBuf>, Vec<String>)>>
 }
 
 impl eframe::App for MainApp {
@@ -46,7 +48,7 @@ impl eframe::App for MainApp {
                         }
                     }
 
-                    ui.label(format!("Files selected: {}", self.picked_paths.len()));
+                    ui.label(format!("Files selected: {}", self.picked_paths.len() - self.amount_done));
 
                     if ui.add_enabled(!self.working, egui::Button::new("Format subtitles")).clicked() {
                         if self.picked_paths.len() > 0 {
@@ -55,22 +57,22 @@ impl eframe::App for MainApp {
                             let rules = self.rules.clone().unwrap();
                             let picked_paths = self.picked_paths.clone();
                             let tx = self.tx.clone();
-                            let divider: f32 = picked_paths.len() as f32;
-                            thread::spawn(move || {
+                            self.thread_handler = Some(thread::spawn(move || {
+                                let mut failed_paths: Vec<PathBuf> = Vec::new();
+                                let mut failed_error_messages: Vec<String> = Vec::new();
                                 for (index, picked_path) in picked_paths.iter().enumerate() {
                                     if let Err(err) = utils::format_subtitle(rules.clone(), picked_path.clone()) {
-                                        println!("{}", err.to_string())
+                                        failed_error_messages.push(err.to_string());
+                                        failed_paths.push(picked_path.clone());
                                     };
-                                    let current_amount: f32 = (index+1) as f32;
-                                    tx.send(((current_amount/divider)*100.0) as i32);
+                                    tx.try_send((index+1));
                                 }
-                                println!("done")
-                            });
-                            self.picked_paths.clear();
+                                return (failed_paths, failed_error_messages);
+                            }));
                         }
                     }
 
-                    if self.progress == 100 {
+                    if self.done == true {
                         ui.label("Done");
                         if self.failed_paths.len() > 0 {
                             for (index, failed_path) in self.failed_paths.clone().iter().enumerate() {
@@ -80,15 +82,21 @@ impl eframe::App for MainApp {
                     }
 
                     if self.working {
-                        match self.rx.try_recv() {
-                            Ok(amount_done) => {
-                                self.progress = amount_done;
-                            },
-                            Err(_) => {}
+                        while let Ok(message) = self.rx.try_recv() {
+                            self.amount_done = message;
                         }
-                        ui.add(ProgressBar::new((self.progress as f32) / 100.0).desired_width(256.0));
-                        if self.progress == 100 {
+                        ui.add(ProgressBar::new(self.amount_done as f32 / self.picked_paths.len() as f32).desired_width(256.0));
+                        if self.amount_done == self.picked_paths.len() {
+                            self.picked_paths.clear();
+                            self.amount_done = 0;
                             self.working = false;
+                            self.done = true;
+                            match self.thread_handler.take() {
+                                Some(handler) => {
+                                    (self.failed_paths, self.failed_error_messages) = handler.join().unwrap()
+                                },
+                                None => {},
+                            }
                         }
                     }
                 });
@@ -100,7 +108,7 @@ impl eframe::App for MainApp {
 }
 
 fn main() -> Result<(), eframe::Error> {
-    let (tx, rx) = channel();
+    let (tx, rx): (std::sync::mpsc::SyncSender<usize>, Receiver<usize>) = sync_channel(10_000);
 
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(480.0, 240.0)),
@@ -128,9 +136,11 @@ fn main() -> Result<(), eframe::Error> {
             rules,
             error_message,
             working: false,
-            progress: 0,
+            done: false,
+            amount_done: 0,
             tx,
-            rx
+            rx,
+            thread_handler: None
         })),
     )
 }
